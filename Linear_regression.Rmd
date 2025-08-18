@@ -1,0 +1,189 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+# ===========================
+# Simple Linear Regression: y = mx + b
+# ===========================
+```{r}
+# Linear Regression from Scratch - Boston Housing Data
+
+library(MASS)
+library(dplyr)
+library(ggplot2)
+
+data(Boston)
+X_simple <- Boston$rm    # rooms per house
+y <- Boston$medv         # house prices
+
+# We need the average to center our data around the mean
+mean_x <- mean(X_simple)
+mean_y <- mean(y)
+
+# This is where the magic happens - finding the best line
+# The slope tells us how much price changes per room
+numerator <- sum((X_simple - mean_x) * (y - mean_y))
+denominator <- sum((X_simple - mean_x)^2)
+slope <- numerator / denominator
+
+# Once we have slope, intercept is just where the line crosses y-axis
+intercept <- mean_y - slope * mean_x
+
+# Now we can predict any house price given rooms
+y_pred_simple <- slope * X_simple + intercept
+
+# Let's see how wrong we were
+residuals <- y - y_pred_simple
+rmse_simple <- sqrt(mean(residuals^2))
+r_squared_simple <- 1 - sum(residuals^2) / sum((y - mean_y)^2)
+
+# Did we get the same answer as R? Let's check
+our_coeffs <- c(intercept, slope)
+lm_model <- lm(medv ~ rm, data = Boston)
+builtin_coeffs <- coef(lm_model)
+
+print(our_coeffs)
+print(builtin_coeffs)
+```
+# ===========================
+# The Real story teller 
+# ===========================
+```{r}
+rmse_simple      # How wrong are we on average?
+r_squared_simple # How much variance did we explain?
+```
+
+# ===========================
+# Residual Analysis - The Real Test
+# ===========================
+```{r}
+# Plot 1: Residuals vs Fitted - Should look random
+plot(y_pred_simple, residuals, col = "blue", pch = 16)
+abline(h = 0, col = "red", lwd = 2)
+title("Residuals vs Fitted: Is our model working?")
+# Good model = random scatter around zero line
+# Bad model = patterns, curves, funnels
+```
+
+
+```{r}
+# Plot 2: Check for outliers - which houses are we getting very wrong?
+outlier_threshold <- 2 * sd(residuals)
+outliers <- which(abs(residuals) > outlier_threshold)
+plot(X_simple, y, col = "blue", pch = 16)
+abline(intercept, slope, col = "red", lwd = 2)
+points(X_simple[outliers], y[outliers], col = "orange", pch = 16, cex = 2)
+title("Outliers: Houses we can't predict well")
+```
+
+
+```{r}
+# Plot 3: Normal Q-Q plot - Are residuals normally distributed?
+qqnorm(residuals)
+qqline(residuals, col = "red")
+# Points should follow the red line
+```
+
+
+```{r}
+# Plot 4: Scale-Location - Check homoscedasticity (constant variance)
+sqrt_abs_residuals <- sqrt(abs(residuals))
+plot(y_pred_simple, sqrt_abs_residuals, col = "blue", pch = 16)
+title("Scale-Location: Is variance constant?")
+```
+
+
+```{r}
+# ===========================
+# What the residuals tell us
+# ===========================
+
+# Find the worst predictions
+worst_predictions <- order(abs(residuals), decreasing = TRUE)[1:5]
+worst_houses <- Boston[worst_predictions, c("rm", "medv")]
+worst_residuals <- residuals[worst_predictions]
+
+# Show what we learned
+worst_houses
+worst_residuals
+
+# Quick diagnostic summary
+linearity_test <- cor.test(y_pred_simple, residuals)$p.value > 0.05
+normality_test <- shapiro.test(residuals)$p.value > 0.05
+
+# ===========================
+# See what we built
+# ===========================
+
+# Simple regression - just a line through the data
+plot(X_simple, y, col = "blue", pch = 16)
+abline(intercept, slope, col = "red", lwd = 2)
+title("One feature: rooms vs price")
+```
+
+
+```{r}
+# ===========================
+# Multiple Linear Regression: Normal Equation
+# ===========================
+
+# More features = better predictions (hopefully)
+X <- as.matrix(Boston[, c("rm", "lstat", "age")])
+n <- nrow(X)
+
+# We always need that column of 1s for the intercept
+X_bias <- cbind(1, X)  
+
+# This is the heart of linear regression math
+# We're solving: X * theta = y for theta
+XtX <- t(X_bias) %*% X_bias           # Square matrix we can invert
+XtX_inv <- solve(XtX)                 # Getting the inverse
+Xty <- t(X_bias) %*% y                # Right side of equation
+theta <- XtX_inv %*% Xty              # Our answer!
+
+# Matrix math gives us all predictions at once
+y_pred_multiple <- X_bias %*% theta
+
+# How much better did we do with more features?
+residuals_multi <- y - y_pred_multiple
+rmse_multiple <- sqrt(mean(residuals_multi^2))
+r_squared_multiple <- 1 - sum(residuals_multi^2) / sum((y - mean_y)^2)
+
+# Same check - did we match R's math?
+lm_multi <- lm(medv ~ rm + lstat + age, data = Boston)
+our_theta <- as.vector(theta)
+builtin_theta <- coef(lm_multi)
+
+print(our_theta)
+print(builtin_theta)
+```
+
+
+```{r}
+# ===========================
+# The results tell the story
+# ===========================
+
+rmse_simple      # Simple model error
+r_squared_simple # Simple model fit
+
+rmse_multiple    # Multiple model error  
+r_squared_multiple # Multiple model fit
+
+# ===========================
+# See what we built
+# ===========================
+
+# Simple regression - just a line through the data
+plot(X_simple, y, col = "blue", pch = 16)
+abline(intercept, slope, col = "red", lwd = 2)
+title("One feature: rooms vs price")
+
+# Multiple regression - how close did we get?
+plot(y, y_pred_multiple, col = "blue", pch = 16)
+abline(0, 1, col = "red", lwd = 2)
+title("Three features: actual vs predicted")
+```
+
