@@ -1,0 +1,165 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# ======================================================
+# Logistic Regression from Scratch - Using Iris Dataset
+# ======================================================
+```{r}
+library(datasets)
+library(ggplot2)
+
+# Load iris data and create binary classification problem
+data(iris)
+
+# Let's predict: is it setosa (1) or not setosa (0)?
+iris_binary <- iris
+iris_binary$is_setosa <- ifelse(iris_binary$Species == "setosa", 1, 0)
+
+# Use petal length and width as features - they separate setosa well
+X <- as.matrix(iris_binary[, 3:4])  # Select columns Petal.Length, Petal.Width
+y <- iris_binary$is_setosa
+n <- nrow(X)
+
+# Add bias term (intercept)
+X_bias <- cbind(1, X)
+print(X_bias)
+```
+
+# ======================================================
+# Logistic Regression Formula: p = 1 / (1 + e^(-z))
+# ======================================================
+```{r}
+# Initialize weights randomly
+set.seed(42)
+weights <- runif(ncol(X_bias), -0.5, 0.5)
+
+# The sigmoid function - Converts any real number to probability between 0 and 1
+sigmoid <- function(z) {
+  1 / (1 + exp(-z))
+}
+
+# Test our sigmoid
+z_test <- seq(-10, 10, 0.1)
+sigmoid_values <- sigmoid(z_test)
+plot(z_test, sigmoid_values, type = "l", col = "blue", lwd = 2)
+title("Sigmoid Function plot")
+```
+
+# ============================================================
+# Let's Build the Algorithm- USing Manual Gradient Calculation 
+# ============================================================
+```{r}
+# Learning rate - how big steps we take
+learning_rate <- 0.1
+iterations <- 1000
+
+# Store cost history to see learning
+cost_history <- numeric(iterations)
+
+for (i in 1:iterations) {
+  # Forward pass: calculate predictions
+  z <- X_bias %*% weights          # z = X * weights (linear part)
+  h <- sigmoid(z)                  # p = sigmoid(z) (probability part)
+  
+ # Cost: -sum(y*log(h) + (1-y)*log(1-h))
+  cost <- -(1/n) * sum(y * log(h + 1e-15) + (1 - y) * log(1 - h + 1e-15))
+  cost_history[i] <- cost
+  
+  # Gradient: how to change weights   ## dJ/dw = (1/m) * X^T * (h - y)
+  # This tells us which direction to move weights
+  error <- h - y                   # prediction error
+  gradients <- (1/n) * t(X_bias) %*% error
+  
+  # Update weights 
+  weights <- weights - learning_rate * gradients
+}
+
+# Final predictions
+final_z <- X_bias %*% weights
+final_probabilities <- sigmoid(final_z)
+final_predictions <- ifelse(final_probabilities > 0.5, 1, 0)
+
+# Create a data frame
+results <- data.frame(z = final_z, prob = final_probabilities, pred = final_predictions)
+print(results)
+```
+
+# ======================================================
+# Compare against R's glm()
+# ======================================================
+```{r}
+# Get feature names dynamically
+feature_names <- colnames(iris_binary)[3:4]
+
+# Our weights
+our_weights <- weights
+names(our_weights) <- c("Intercept", feature_names)
+
+# R's built-in logistic regression
+formula_str <- paste("is_setosa ~", paste(feature_names, collapse = " + "))
+glm_model <- glm(as.formula(formula_str), data = iris_binary, family = binomial)
+builtin_weights <- coef(glm_model)
+
+# Compare - should be very close
+our_weights
+builtin_weights
+
+# Accuracy
+accuracy <- mean(final_predictions == y)
+print(accuracy * 100)
+```
+
+# ======================================================
+# Visualize results
+# ======================================================
+```{r}
+# Look at the cost function 
+plot(1:iterations, cost_history, type = "l", col = "red", lwd = 2)
+title("Cost Function: Check algorithm learn rate")
+# Should decrease and flatten out
+```
+
+# ======================================================
+# Decision Boundary Visualization
+# ======================================================
+```{r}
+# Create a grid to show decision boundary
+petal_length_range <- seq(min(X[,1]), max(X[,1]), length.out = 50)
+petal_width_range <- seq(min(X[,2]), max(X[,2]), length.out = 50)
+grid <- expand.grid(Petal.Length = petal_length_range, 
+                    Petal.Width = petal_width_range)
+
+# Add bias and predict for entire grid
+grid_bias <- cbind(1, as.matrix(grid))
+grid_z <- grid_bias %*% weights
+grid_probs <- sigmoid(grid_z)
+
+# Plot the decision boundary
+plot(X[,1], X[,2], col = ifelse(y == 1, "red", "blue"), 
+     pch = 16, cex = 1.5,
+     xlab = "Petal Length", ylab = "Petal Width")
+contour(petal_length_range, petal_width_range, 
+        matrix(grid_probs, 50, 50), levels = 0.5, 
+        add = TRUE, col = "black", lwd = 2)
+title("Decision Boundary: Where probability = 0.5")
+legend("topright", c("Setosa", "Not Setosa"), 
+       col = c("red", "blue"), pch = 16)
+```
+
+# ======================================================
+# Results
+# ======================================================
+```{r}
+# Show some predictions with probabilities
+sample_indices <- c(1, 51, 101)  # one from each species
+for (idx in sample_indices) {
+  prob <- final_probabilities[idx]
+  pred <- final_predictions[idx]
+  actual <- y[idx]
+  cat("Flower", idx, ": Prob =", round(prob, 3), 
+      ", Predicted =", pred, ", Actual =", actual, "\n")
+}
+```
+
