@@ -15,9 +15,9 @@ This repository contains machine learning algorithm implementations built from t
 
 ### Completed
 - [ ] **Linear Regression** (Simple & Multiple) 
+- [ ] **Logistic Regression**
 
 ### Planned Implementations
-- [ ] **Logistic Regression**
 - [ ] **K-Nearest Neighbors (KNN)**
 - [ ] **Naive Bayes**
 - [ ] **Decision Tree**
