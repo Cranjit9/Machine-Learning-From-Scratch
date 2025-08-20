@@ -38,10 +38,7 @@ This project uses the following R packages:
 - `tidyverse` - For data manipulation and visualization
 - `dplyr` - For data wrangling
 - `ggplot2` - For plotting and visualization
-
-### Optional (for testing and data)
-- `datasets` - For sample datasets
-- `caret` - For model comparison and validation
+- `data` - Default Built in datsets of R
 
 ### Install Dependencies
 
