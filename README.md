@@ -45,22 +45,7 @@ This project uses the following R packages:
 ```r
 # Install required packages
 install.packages(c("tidyverse", "dplyr", "ggplot2", "datasets", "caret"))
-
-# Or install all at once
-packages <- c("tidyverse", "dplyr", "ggplot2", "datasets", "caret")
-install.packages(packages)
 ```
-
-## Usage
-
-### General Structure
-Each algorithm is implemented as a function-based approach with the following methods:
-- `fit()` - Train the model
-- `predict()` - Make predictions
-- `evaluate()` - Calculate performance metrics
-- `plot()` - Visualize results
-- `get_coefficients()` - Extract model parameters
-
 ## Learning Resources
 
 This repository is designed for:
