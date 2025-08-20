@@ -1,0 +1,177 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+# ======================================================
+# K-Nearest Neighbors (KNN) from Scratch - Using mtcars Dataset
+# ======================================================
+```{r}
+library(datasets)
+library(class)
+library(FNN)
+
+data(mtcars)
+
+# Get all features except our target variable
+features <- names(mtcars)[names(mtcars) != "mpg"]
+X <- as.matrix(mtcars[, features])
+
+# Scale features - KNN is sensitive to different scales
+X_scaled <- scale(X)
+n <- nrow(X_scaled)
+```
+
+# ===========================
+# Distance-Based Classification
+# ===========================
+```{r}
+# Create binary problem: high mpg (>20) vs low mpg
+y_class <- ifelse(mtcars$mpg > 20, "high", "low")
+k <- 5
+loo_predictions <- character(n)
+
+# Core KNN algorithm: for each point, find neighbors and vote
+for (i in 1:n) {
+  # Leave one out for testing
+  X_train <- X_scaled[-i, ]
+  y_train <- y_class[-i]
+  test_point <- X_scaled[i, ]
+  
+  # Euclidean distance = sqrt(sum((x1-x2)^2))
+  distances <- sqrt(rowSums((X_train - test_point)^2))
+  
+  # Find the k closest neighbors
+  nearest_indices <- order(distances)[1:k]
+  nearest_labels <- y_train[nearest_indices]
+  
+  # Classification = majority vote among neighbors
+  vote_counts <- table(nearest_labels)
+  loo_predictions[i] <- names(vote_counts)[which.max(vote_counts)]
+}
+
+# Evaluate performance and compare with R's built-in
+class_accuracy <- mean(loo_predictions == y_class)
+builtin_knn <- knn.cv(X_scaled, y_class, k = 5)
+builtin_accuracy <- mean(builtin_knn == y_class)
+
+print(paste("Our accuracy:", round(class_accuracy, 3)))
+print(paste("R's accuracy:", round(builtin_accuracy, 3)))
+```
+
+# ===========================
+# MATH: Distance-Based Regression
+# ===========================
+```{r}
+# Predict exact mpg values instead of categories
+y_reg <- mtcars$mpg
+reg_predictions <- numeric(n)
+
+for (i in 1:n) {
+  X_train <- X_scaled[-i, ]
+  y_train <- y_reg[-i]
+  test_point <- X_scaled[i, ]
+  
+  # Distance calculation 
+  distances <- sqrt(rowSums((X_train - test_point)^2))
+  nearest_indices <- order(distances)[1:k]
+  nearest_values <- y_train[nearest_indices]
+  
+  # Regression = average of neighbor values
+  reg_predictions[i] <- mean(nearest_values)
+}
+
+# Calculate performance metrics
+rmse <- sqrt(mean((reg_predictions - y_reg)^2))
+r_squared <- 1 - sum((y_reg - reg_predictions)^2) / sum((y_reg - mean(y_reg))^2)
+
+# Compare with R's built-in KNN regression 
+builtin_knn_reg <- knn.reg(X_scaled, X_scaled, y_reg, k = 5)
+builtin_rmse <- sqrt(mean((builtin_knn_reg$pred - y_reg)^2))
+
+
+print(paste("RMSE:", round(rmse, 2)))
+print(paste("R-squared:", round(r_squared, 3)))
+print(paste("R's RMSE:", round(builtin_rmse, 2)))
+```
+
+# ===========================
+# Finding Optimal K (Elbow Method)
+# ===========================
+```{r}
+
+# Test different k values to find optimal performance
+k_values <- 1:10
+errors <- numeric(length(k_values))
+
+for (k_idx in 1:length(k_values)) {
+  k_test <- k_values[k_idx]
+  predictions <- numeric(n)
+  
+  # Test k value using leave-one-out
+  for (i in 1:n) {
+    X_train <- X_scaled[-i, ]
+    y_train <- y_reg[-i]
+    test_point <- X_scaled[i, ]
+    
+    distances <- sqrt(rowSums((X_train - test_point)^2))
+    nearest_indices <- order(distances)[1:k_test]
+    predictions[i] <- mean(y_train[nearest_indices])
+  }
+  
+  errors[k_idx] <- sqrt(mean((predictions - y_reg)^2))
+}
+
+# Find k that gives lowest error
+optimal_k <- k_values[which.min(errors)]
+print(paste("Optimal k:", optimal_k))
+```
+
+# ===========================
+# Visualization
+# ===========================
+```{r}
+# Show how error changes with k
+plot(k_values, errors, type = "b", col = "blue", lwd = 2)
+title("Elbow Method: Finding Optimal K")
+abline(v = optimal_k, col = "red", lty = 2)
+```
+
+
+```{r}
+# Show regression performance
+plot(y_reg, reg_predictions, col = "blue", pch = 16, cex = 1.2)
+abline(0, 1, col = "red", lwd = 2)
+title("Actual vs Predicted MPG")
+```
+
+
+```{r}
+# Decision boundary using just 2 features for visualization
+X_2d <- X_scaled[, c("wt", "hp")]  # weight and horsepower
+plot(X_2d[,1], X_2d[,2], 
+     col = ifelse(y_class == "high", "red", "blue"), pch = 16, cex = 1.5)
+title("Classification: Weight vs Horsepower")
+legend("topright", c("High MPG", "Low MPG"), col = c("red", "blue"), pch = 16)
+```
+
+# ===========================
+# KNN Neighbor Analysis
+# ===========================
+```{r}
+# Pick the first car and show its neighbors
+test_car <- 1
+distances_all <- sqrt(rowSums((X_scaled[-test_car, ] - X_scaled[test_car, ])^2))
+nearest_5 <- order(distances_all)[1:5]
+
+cat("\nClosest cars to", rownames(mtcars)[test_car], ":\n")
+for (i in 1:5) {
+  neighbor_idx <- nearest_5[i] + (nearest_5[i] >= test_car)
+  distance <- round(distances_all[nearest_5[i]], 2)
+  mpg_val <- mtcars$mpg[neighbor_idx]
+  cat(i, ":", rownames(mtcars)[neighbor_idx], 
+      "| Distance:", distance, "| MPG:", mpg_val, "\n")
+}
+```
+
