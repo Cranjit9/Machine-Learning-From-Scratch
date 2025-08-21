@@ -1,0 +1,278 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# ===========================
+# Naive Bayes from Scratch - using Iris Dataset
+# ===========================
+```{r}
+library(datasets)
+library(e1071)  # for built-in naiveBayes comparison
+
+data(iris)
+
+# Get features and prepare data
+features <- names(iris)[1:4]  # Sepal.Length, Sepal.Width, Petal.Length, Petal.Width
+X <- iris[, features]
+n <- nrow(X)
+```
+
+# ==============================================
+# Binary Classification (Setosa vs Non-Setosa)
+# ==============================================
+```{r}
+# Create binary problem
+y_binary <- ifelse(iris$Species == "setosa", "setosa", "not_setosa")
+
+# Split data for validation
+set.seed(42)
+train_idx <- sample(1:n, 0.7 * n)
+X_train <- X[train_idx, ]
+y_train <- y_binary[train_idx]
+X_test <- X[-train_idx, ]
+y_test <- y_binary[-train_idx]
+
+# Calculate class probabilities P(class)
+class_counts <- table(y_train)
+class_probs <- class_counts / length(y_train)
+
+print("Class probabilities:")
+print(class_probs)
+
+# Calculate Gaussian parameters for each feature per class
+# P(feature|class) ~ Normal(mean, variance)
+classes <- names(class_probs)
+feature_stats <- list()
+
+for (class in classes) {
+  class_data <- X_train[y_train == class, ]
+  feature_stats[[class]] <- list()
+  
+  for (feature in features) {
+    feature_values <- class_data[[feature]]
+    feature_stats[[class]][[feature]] <- list(
+      mean = mean(feature_values),
+      var = var(feature_values)
+    )
+  }
+}
+
+print("Feature statistics by class:")
+print(feature_stats)
+
+# Gaussian probability density function
+gaussian_pdf <- function(x, mean, variance) {
+  (1 / sqrt(2 * pi * variance)) * exp(-((x - mean)^2) / (2 * variance))
+}
+
+# Naive Bayes prediction using Bayes theorem
+# P(class|features) = P(features|class) * P(class) / P(features)
+# We assume features are independent (naive assumption)
+predict_naive_bayes <- function(X_new) {
+  predictions <- character(nrow(X_new))
+  
+  for (i in 1:nrow(X_new)) {
+    class_scores <- numeric(length(classes))
+    names(class_scores) <- classes
+    
+    for (j in 1:length(classes)) {
+      class <- classes[j]
+      
+      # Start with P(class)
+      log_prob <- log(class_probs[class])
+      
+      # Multiply by P(feature|class) for each feature
+      for (feature in features) {
+        feature_value <- X_new[i, feature]
+        mean_val <- feature_stats[[class]][[feature]]$mean
+        var_val <- feature_stats[[class]][[feature]]$var
+        
+        # Use log to avoid numerical issues
+        log_prob <- log_prob + log(gaussian_pdf(feature_value, mean_val, var_val))
+      }
+      
+      class_scores[j] <- log_prob
+    }
+    
+    # Pick class with highest probability
+    predictions[i] <- names(class_scores)[which.max(class_scores)]
+  }
+  
+  return(predictions)
+}
+
+# Make predictions
+binary_predictions <- predict_naive_bayes(X_test)
+
+# Evaluate performance
+binary_accuracy <- mean(binary_predictions == y_test)
+print(paste("Binary classification accuracy:", round(binary_accuracy, 3)))
+
+# Compare with R's built-in
+builtin_nb_binary <- naiveBayes(X_train, y_train)
+builtin_pred_binary <- predict(builtin_nb_binary, X_test)
+builtin_accuracy_binary <- mean(builtin_pred_binary == y_test)
+print(paste("R's naiveBayes accuracy:", round(builtin_accuracy_binary, 3)))
+```
+
+# ==================================================
+# MATH: Multi-Class Classification (All 3 Species)
+# ==================================================
+```{r}
+# Use original 3-class problem
+y_multi <- iris$Species[train_idx]
+y_test_multi <- iris$Species[-train_idx]
+
+# Calculate class probabilities for 3 classes
+class_counts_multi <- table(y_multi)
+class_probs_multi <- class_counts_multi / length(y_multi)
+
+print("Multi-class probabilities:")
+print(class_probs_multi)
+
+# Calculate feature statistics for all 3 classes
+classes_multi <- levels(iris$Species)
+feature_stats_multi <- list()
+
+for (class in classes_multi) {
+  class_data <- X_train[y_multi == class, ]
+  feature_stats_multi[[class]] <- list()
+  
+  for (feature in features) {
+    feature_values <- class_data[[feature]]
+    feature_stats_multi[[class]][[feature]] <- list(
+      mean = mean(feature_values),
+      var = var(feature_values)
+    )
+  }
+}
+
+# Multi-class prediction function
+predict_multiclass <- function(X_new) {
+  predictions <- character(nrow(X_new))
+  
+  for (i in 1:nrow(X_new)) {
+    class_scores <- numeric(length(classes_multi))
+    names(class_scores) <- classes_multi
+    
+    for (j in 1:length(classes_multi)) {
+      class <- classes_multi[j]
+      
+      # P(class)
+      log_prob <- log(class_probs_multi[class])
+      
+      # P(features|class) assuming independence
+      for (feature in features) {
+        feature_value <- X_new[i, feature]
+        mean_val <- feature_stats_multi[[class]][[feature]]$mean
+        var_val <- feature_stats_multi[[class]][[feature]]$var
+        
+        log_prob <- log_prob + log(gaussian_pdf(feature_value, mean_val, var_val))
+      }
+      
+      class_scores[j] <- log_prob
+    }
+    
+    predictions[i] <- names(class_scores)[which.max(class_scores)]
+  }
+  
+  return(predictions)
+}
+
+# Make multi-class predictions
+multi_predictions <- predict_multiclass(X_test)
+
+# Evaluate multi-class performance
+multi_accuracy <- mean(multi_predictions == y_test_multi)
+print(paste("Multi-class accuracy:", round(multi_accuracy, 3)))
+
+# Compare with R's built-in
+builtin_nb_multi <- naiveBayes(X_train, y_multi)
+builtin_pred_multi <- predict(builtin_nb_multi, X_test)
+builtin_accuracy_multi <- mean(builtin_pred_multi == y_test_multi)
+print(paste("R's multi-class accuracy:", round(builtin_accuracy_multi, 3)))
+```
+
+# ===========================
+# Visualization
+# ===========================
+```{r}
+# Show feature distributions by class
+par(mfrow = c(2, 2))
+
+for (i in 1:4) {
+  feature_name <- features[i]
+  
+  # Plot histograms for each class
+  setosa_data <- iris[iris$Species == "setosa", feature_name]
+  versicolor_data <- iris[iris$Species == "versicolor", feature_name]
+  virginica_data <- iris[iris$Species == "virginica", feature_name]
+  
+  hist(setosa_data, col = rgb(1,0,0,0.5), main = feature_name, 
+       xlab = "Value", breaks = 10, xlim = range(iris[, feature_name]))
+  hist(versicolor_data, col = rgb(0,1,0,0.5), add = TRUE, breaks = 10)
+  hist(virginica_data, col = rgb(0,0,1,0.5), add = TRUE, breaks = 10)
+  
+  if (i == 1) {
+    legend("topright", c("Setosa", "Versicolor", "Virginica"), 
+           col = c("red", "green", "blue"), lty = 1, cex = 0.8)
+  }
+}
+
+par(mfrow = c(1, 1))
+```
+```{r}
+# ===========================
+# Example: Manual Calculation Check
+# ===========================
+
+# Verify prediction for first test sample
+test_sample <- X_test[1, ]
+print("Test sample features:")
+print(round(as.numeric(test_sample), 2))
+
+print("Predicted vs Actual:")
+print(paste("Predicted:", multi_predictions[1]))
+print(paste("Actual:", as.character(y_test_multi[1])))
+```
+
+# ===========================
+# Example: Step-by-Step Prediction
+# ===========================
+```{r}
+# Show how prediction works for one test sample
+test_sample <- X_test[1, ]
+
+print("Step-by-step prediction for test sample 1:")
+print(paste("Features:", paste(round(as.numeric(test_sample), 2), collapse = ", ")))
+
+# Calculate probabilities for each class
+class_probabilities <- numeric(length(classes_multi))
+names(class_probabilities) <- classes_multi
+
+for (class in classes_multi) {
+  log_prob <- log(class_probs_multi[class])
+  
+  print(paste("Class:", class))
+  print(paste("  Prior P(" , class, ") =", round(class_probs_multi[class], 3)))
+  
+  for (feature in features) {
+    feature_value <- test_sample[[feature]]
+    mean_val <- feature_stats_multi[[class]][[feature]]$mean
+    var_val <- feature_stats_multi[[class]][[feature]]$var
+    likelihood <- gaussian_pdf(feature_value, mean_val, var_val)
+    
+    print(paste("  P(", feature, "=", round(feature_value, 2), "|", class, ") =", 
+                round(likelihood, 4)))
+    log_prob <- log_prob + log(likelihood)
+  }
+  
+  class_probabilities[class] <- log_prob
+  print(paste("  Total log probability:", round(log_prob, 2)))
+}
+
+print(paste("Predicted class:", names(class_probabilities)[which.max(class_probabilities)]))
+print(paste("Actual class:", as.character(y_test_multi[1])))
+```
+
