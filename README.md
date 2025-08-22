@@ -18,9 +18,10 @@ This repository contains machine learning algorithm implementations built from t
 - [ ] **Logistic Regression**
 - [ ] **K-Nearest Neighbors (KNN)**
 - [ ] **Naive Bayes**
+- [ ] **Binary Decision Tree**
 
 ### Planned Implementations
-- [ ] **Decision Tree**
+- [ ] **Full Recursive Decision Tree**
 - [ ] **Random Forest**
 - [ ] **Support Vector Machine (SVM)**
 - [ ] **K-Means Clustering**
