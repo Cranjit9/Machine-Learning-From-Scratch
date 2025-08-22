@@ -1,0 +1,321 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+# ==========================================================================
+# # Decision Tree Part 1A - Information Gain (Entropy) using Titanic Dataset
+# ==========================================================================
+```{r}
+# Data Setup
+library(datasets)
+library(rpart)
+
+
+data(Titanic)
+titanic_df <- as.data.frame(Titanic)
+
+# Expand frequency table to individual records
+titanic_expanded <- titanic_df[rep(1:nrow(titanic_df), titanic_df$Freq), ]
+titanic_expanded$Freq <- NULL
+titanic_expanded$Survived_binary <- ifelse(titanic_expanded$Survived == "Yes", 1, 0)
+
+print(paste("Total passengers:", nrow(titanic_expanded)))
+print(table(titanic_expanded$Sex, titanic_expanded$Survived))
+```
+
+# ===========================
+# Initial Entropy Calculation
+# ===========================
+```{r}
+# Count survival outcomes in entire dataset
+total_samples <- nrow(titanic_expanded)
+survived_count <- sum(titanic_expanded$Survived_binary)
+died_count <- total_samples - survived_count
+
+print(paste("Total survived:", survived_count))
+print(paste("Total died:", died_count))
+
+# Calculate proportions
+p_survived <- survived_count / total_samples
+p_died <- died_count / total_samples
+
+print(paste("P(Survived):", round(p_survived, 3)))
+print(paste("P(Died):", round(p_died, 3)))
+
+# Entropy formula = -sum(p * log2(p))
+initial_entropy <- -(p_survived * log2(p_survived) + p_died * log2(p_died))
+print(paste("Initial entropy:", round(initial_entropy, 4)))
+```
+
+# ================================
+# Split by Sex - Count Each Branch
+# ================================
+```{r}
+# Separate data by sex
+male_indices <- titanic_expanded$Sex == "Male"
+female_indices <- titanic_expanded$Sex == "Female"
+
+# Count totals by sex
+male_total <- sum(male_indices)
+female_total <- sum(female_indices)
+
+# Count survival by sex
+male_survived <- sum(titanic_expanded$Survived_binary[male_indices])
+male_died <- male_total - male_survived
+
+female_survived <- sum(titanic_expanded$Survived_binary[female_indices])
+female_died <- female_total - female_survived
+
+print("Male branch:")
+print(paste("  Total males:", male_total))
+print(paste("  Males survived:", male_survived))
+print(paste("  Males died:", male_died))
+
+print("Female branch:")
+print(paste("  Total females:", female_total))
+print(paste("  Females survived:", female_survived))
+print(paste("  Females died:", female_died))
+```
+
+# ===========================
+# Entropy for Male Branch
+# ===========================
+```{r}
+# Calculate proportions for males
+p_male_survived <- male_survived / male_total
+p_male_died <- male_died / male_total
+
+print(paste("P(Survived|Male):", round(p_male_survived, 3)))
+print(paste("P(Died|Male):", round(p_male_died, 3)))
+
+# Calculate entropy for male branch
+male_entropy <- -(p_male_survived * log2(p_male_survived) + p_male_died * log2(p_male_died))
+print(paste("Male branch entropy:", round(male_entropy, 4)))
+```
+
+# ===========================
+# Entropy for Female Branch
+# ===========================
+```{r}
+# Calculate proportions for females
+p_female_survived <- female_survived / female_total
+p_female_died <- female_died / female_total
+
+print(paste("P(Survived|Female):", round(p_female_survived, 3)))
+print(paste("P(Died|Female):", round(p_female_died, 3)))
+
+# Calculate entropy for female branch
+female_entropy <- -(p_female_survived * log2(p_female_survived) + p_female_died * log2(p_female_died))
+print(paste("Female branch entropy:", round(female_entropy, 4)))
+```
+
+# ==========================================
+# Weighted Average Entropy After Split
+# ==========================================
+```{r}
+# Calculate weights (proportion of total data in each branch)
+weight_male <- male_total / total_samples
+weight_female <- female_total / total_samples
+
+print(paste("Weight of male branch:", round(weight_male, 3)))
+print(paste("Weight of female branch:", round(weight_female, 3)))
+
+# Weighted average entropy after splitting on Sex
+weighted_entropy <- weight_male * male_entropy + weight_female * female_entropy
+print(paste("Weighted entropy after split:", round(weighted_entropy, 4)))
+```
+
+# ===================================
+# Information Gain Calculation
+# ===================================
+```{r}
+# Information Gain = Initial Entropy - Weighted Entropy After Split
+information_gain <- initial_entropy - weighted_entropy
+print(paste("Information Gain from Sex split:", round(information_gain, 4)))
+
+# This tells us how much uncertainty we reduced by splitting on Sex
+print(paste("Uncertainty reduction:", round((information_gain/initial_entropy)*100, 1), "%"))
+```
+
+# ==============================
+# Decision Rule Based on Entropy
+# ==============================
+```{r}
+# For each branch, predict the majority class
+male_prediction <- ifelse(p_male_survived > 0.5, 1, 0)
+female_prediction <- ifelse(p_female_survived > 0.5, 1, 0)
+
+print("Decision rules based on majority class:")
+print(paste("IF Sex = Male THEN Predict", male_prediction, "(", round(p_male_survived*100, 1), "% survival rate)"))
+print(paste("IF Sex = Female THEN Predict", female_prediction, "(", round(p_female_survived*100, 1), "% survival rate)"))
+```
+
+# ===========================
+# Apply Our Decision Tree
+# ===========================
+```{r}
+# Make predictions using our entropy-based rule
+predictions <- ifelse(titanic_expanded$Sex == "Female", female_prediction, male_prediction)
+
+# Calculate accuracy
+correct_predictions <- sum(predictions == titanic_expanded$Survived_binary)
+accuracy <- correct_predictions / total_samples
+
+print(paste("Our entropy-based tree accuracy:", round(accuracy, 3)))
+```
+
+# ===========================
+# Compare with R's rpart
+# ===========================
+```{r}
+# Build single-split tree using R's rpart
+rpart_tree <- rpart(Survived_binary ~ Sex, data = titanic_expanded, method = "class", cp = 0.3) 
+rpart_pred <- predict(rpart_tree, titanic_expanded, type = "class")
+rpart_pred_binary <- as.numeric(as.character(rpart_pred))
+rpart_accuracy <- mean(rpart_pred_binary == titanic_expanded$Survived_binary)
+
+print(paste("Our accuracy:", round(accuracy, 3)))
+print(paste("R's rpart accuracy:", round(rpart_accuracy, 3)))
+
+# Check if we get the same result
+print(paste("Results match:", accuracy == rpart_accuracy))
+```
+
+# ==============================================================================================================
+# When Using Default R's (rpart) understanding Complexity Parameter (CP) before choosing its value is IMPORTANT
+# ==============================================================================================================
+```{r}
+# CP rule: If Information Gain < CP, no split occurs
+print(paste("Our Information Gain:", round(information_gain, 4)))
+print("Three methods to choose CP in rpart:")
+
+# Method 1: Base CP on calculated information gain
+cp_method1 <- information_gain * 0.9
+rpart_method1 <- rpart(Survived_binary ~ Sex, data = titanic_expanded, 
+                      method = "class", cp = cp_method1)
+pred_method1 <- predict(rpart_method1, titanic_expanded, type = "class")
+acc_method1 <- mean(as.numeric(as.character(pred_method1)) == titanic_expanded$Survived_binary)
+print(paste("Method 1 - CP based on gain:", round(acc_method1, 3)))
+
+# Method 2: Use default CP
+rpart_method2 <- rpart(Survived_binary ~ Sex, data = titanic_expanded, method = "class")
+pred_method2 <- predict(rpart_method2, titanic_expanded, type = "class")
+acc_method2 <- mean(as.numeric(as.character(pred_method2)) == titanic_expanded$Survived_binary)
+print(paste("Method 2 - Default CP:", round(acc_method2, 3)))
+
+# Method 3: Control with maxdepth instead of CP
+print("Method 3 - How CP affects splits:")
+
+# High CP blocks split
+rpart_blocked <- rpart(Survived_binary ~ Sex, data = titanic_expanded, method = "class", cp = 0.5)
+pred_blocked <- predict(rpart_blocked, titanic_expanded, type = "class")
+acc_blocked <- mean(as.numeric(as.character(pred_blocked)) == titanic_expanded$Survived_binary)
+print(paste("High CP (0.5) - blocks split:", round(acc_blocked, 3)))
+
+# Maxdepth forces split regardless of CP
+rpart_forced <- rpart(Survived_binary ~ Sex, data = titanic_expanded, 
+                     method = "class", maxdepth = 1, cp = 0.01)
+pred_forced <- predict(rpart_forced, titanic_expanded, type = "class")
+acc_forced <- mean(as.numeric(as.character(pred_forced)) == titanic_expanded$Survived_binary)
+print(paste("Maxdepth = 1 - forces split:", round(acc_forced, 3)))
+
+print(paste("Our manual calculation:", round(accuracy, 3)))
+
+# Why understanding CP matters beyond this dataset
+# If info_gain = 0.005, then default CP = 0.01 would block useful splits
+# Complex datasets might need CP = 0.001 or CP = 0.1 depending on goals
+# For noisy data, CP = 0.05 might give better generalization
+# maxdepth = 1 guarantees single split regardless of information gains
+```
+
+
+# ===========================
+# Visualization
+# ===========================
+```{r}
+# Show the entropy reduction visually
+barplot(c(initial_entropy, weighted_entropy), 
+        names.arg = c("Before Split", "After Split"),
+        main = "Entropy Reduction from Sex Split",
+        ylab = "Entropy",
+        col = c("red", "green"))
+
+# Show survival rates by sex
+barplot(c(p_male_survived, p_female_survived), 
+        names.arg = c("Male", "Female"),
+        main = "Survival Rate by Sex",
+        ylab = "Survival Probability",
+        col = c("lightblue", "pink"))
+```
+
+# =======================================
+# # Decision Tree Part 1B - Gini Impurity 
+# =======================================
+
+```{r}
+# Gini Impurity Calculation
+# Initial Gini: 1 - sum(p^2)
+initial_gini <- 1 - (p_survived^2 + p_died^2)
+print(paste("Initial Gini:", round(initial_gini, 4)))
+
+# Calculate impurity for Male branch
+male_gini <- 1 - (p_male_survived^2 + p_male_died^2)
+print(paste("Male Gini:", round(male_gini, 4)))
+
+# Calculate impurity for Female branch   
+female_gini <- 1 - (p_female_survived^2 + p_female_died^2)
+print(paste("Female Gini:", round(female_gini, 4)))
+
+# Weighted average after split
+weighted_gini <- weight_male * male_gini + weight_female * female_gini
+
+# Calculate Gini Gain = Initial - Weighted
+gini_gain <- initial_gini - weighted_gini
+print(paste("Gini Gain:", round(gini_gain, 4)))
+```
+# ===========================
+# Visualization
+# ===========================
+```{r}
+# Compare impurity reduction
+par(mfrow = c(1, 2))
+
+# Gini reduction
+barplot(c(initial_gini, weighted_gini), 
+        names.arg = c("Before", "After"),
+        main = "Gini Impurity",
+        col = c("red", "green"))
+
+# Entropy reduction  
+barplot(c(initial_entropy, weighted_entropy), 
+        names.arg = c("Before", "After"),
+        main = "Entropy",
+        col = c("red", "green"))
+
+par(mfrow = c(1, 1))
+```
+
+# ===========================
+# Compare with Entropy 
+# ===========================
+```{r}
+
+print("Comparison:")
+print(paste("Gini Gain:", round(gini_gain, 4)))
+print(paste("Info Gain:", round(information_gain, 4)))
+
+# Make predictions using decision rule (majority class)
+predictions_gini <- ifelse(titanic_expanded$Sex == "Female", 1, 0)
+accuracy_gini <- mean(predictions_gini == titanic_expanded$Survived_binary)
+
+print(paste("Gini accuracy:", round(accuracy_gini, 3)))
+print(paste("Entropy accuracy:", round(accuracy, 3)))
+
+# Both methods give same result
+print(paste("Results identical:", accuracy_gini == accuracy))
+```
+
+
+
